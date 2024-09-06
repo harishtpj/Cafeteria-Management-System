@@ -24,7 +24,7 @@ CREATE TABLE Items (
 DROP TABLE IF EXISTS DailyStock;
 CREATE TABLE DailyStock (
 	itemCode INT,
-	reciptDate DATE,
+	receiptDate DATE,
 	quantity INT,
 	PRIMARY KEY(itemCode, reciptDate),
 	FOREIGN KEY(itemCode) REFERENCES Items(itemCode)

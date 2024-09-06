@@ -220,6 +220,67 @@ def menuMan(dbCur, userData):
         conn.commit()
         cli.log('S', "Deleted item sucessfully!")
 
+def getReceiptData(dataTable):
+    data = []
+    opt = "y"
+    while opt.lower() == 'y':
+        print(dataTable)
+        icd = validateInput(cli.cols+"Enter itemCode: ", None, int)
+        qty = validateInput(cli.cols+"Enter quantity: ", None, int)
+        data.append((icd, qty))
+        opt = validateInput("Do you want to continue[y/n]: ", "yn")
+    return data
+
+def stockMan(dbCur, userData):
+    options = ["Add receipt", "View receipt", "Update quantity", "Delete item"]
+    header = [("itemCode", "itemName", "quantity")]
+    opt = cli.inputLOV("Choose an operation", options)
+
+    if opt == "Add receipt":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Adding new receipt", cli.colors.reset)
+        
+        dbCur.execute("SELECT * FROM items")
+        dbCur.executemany("INSERT INTO dailyStock VALUES (%s, current_date(), %s)",
+                          getReceiptData(cli.genTable(header + dbCur.fetchall())))
+        conn.commit()
+        cli.log('S', "Added receipt successfully!")
+
+    elif opt == "View receipt":
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
+                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        print(cli.genTable(header + dbCur.fetchall()))
+
+    elif opt == "Update quantity":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Updating quantity", cli.colors.reset)
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
+                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        print(cli.genTable(header + dbCur.fetchall()))
+        while True:
+            icd = validateInput(cli.cols+"Enter the itemCode to update: ", None, int)
+            dbCur.execute("SELECT * FROM items WHERE itemCode = {}".format(icd))
+            data = dbCur.fetchone()
+            if data is not None:
+                break
+            cli.log('E', 'No item for given itemCode:', icd)
+        qty = validateInput(cli.cols+"Enter new quantity: ", None, int)
+        dbCur.execute("UPDATE dailyStock SET quantity = {} WHERE itemCode = {} \
+                AND receiptDate = current_date()".format(qty,icd))
+        conn.commit()
+        cli.log('S', "Updated quantity sucessfully!")
+
+    elif opt == "Delete item":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Deleting receipt item", cli.colors.reset)
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
+                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        print(cli.genTable(header + dbCur.fetchall()))
+        icd = validateInput(cli.cols+"Enter the itemCode to delete: ", None, int)
+        dbCur.execute("DELETE FROM dailyStock WHERE receiptDate = current_date() AND itemCode = {}".format(icd))
+        conn.commit()
+        cli.log('S', "Deleted item sucessfully!")
+
 def mainMenu(dbCur, userData):
     while True:
         options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
@@ -235,10 +296,10 @@ def mainMenu(dbCur, userData):
                 cli.log('E', "User", userData['name'], "doesn't have rights to manage customers!")
             else:
                 custMan(dbCur, userData)
-        elif opt == "Add menu Item":
+        elif opt == "Customize menu":
             menuMan(dbCur, userData)
         elif opt == "Daily Stock receipt":
-            raise NotImplementedError
+            stockMan(dbCur, userData)
         elif opt == "Daily Sales entry":
             raise NotImplementedError
         elif opt == "Exit":
@@ -268,7 +329,7 @@ if conn.is_connected():
     else:
         cli.log('E', "No such user in database:", uname)
 
-input("Press any key to continue...")
+input("Press enter to continue...")
 conn.commit()
 conn.close()
 
