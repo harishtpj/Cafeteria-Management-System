@@ -63,7 +63,7 @@ def inputLOV(prompt, options):
     print(genTable([((i+1), options[i]) for i in range(len(options))], False))
     while True:
         try:
-            optId = int(input("Enter an option: "))
+            optId = int(input(cols+colors.bold+"ENTER AN OPTION: "+colors.reset))
             return options[optId-1]
         except ValueError:
             log('W', "Invalid input typed. Please try again!")

@@ -31,13 +31,13 @@ def staffMan(dbCur, userData):
     opt = cli.inputLOV("How would you like to manage staffs?", options)
 
     if opt == "Add new user":
-        print("-"*10)
-        print(cli.colors.bold + "Adding new user", cli.colors.reset)
-        name = input("Enter name of the user: ")
-        uname = input("Enter username for user: ")
-        passwd = input("Enter password for user: ")
+        print(cli.cols+"-"*10)
+        print(cli.cols + cli.colors.bold + "Adding new user", cli.colors.reset)
+        name = input(cli.cols+"Enter Staff name: ")
+        uname = input(cli.cols+"Enter userid for user: ")
+        passwd = input(cli.cols+"Enter password for user: ")
         dbCur.execute("SELECT MAX(id)+1 FROM staff")
-        query = "INSERT INTO staff VALUES ({}, '{}', '{}', '{}', 1)" \
+        query = "INSERT INTO staff VALUES ({}, '{}', '{}', '{}', 'A')" \
                 .format(dbCur.fetchone()[0], name, uname, passwd)
         dbCur.execute(query)
         conn.commit()
@@ -51,26 +51,26 @@ def staffMan(dbCur, userData):
         dbCur.execute(query)
         print(cli.genTable(header + dbCur.fetchall()))
         while True:
-            uid = validateInput("Enter the user id to edit: ", None, int)
+            uid = validateInput(cli.cols+"Enter the user id to edit: ", None, int)
             dbCur.execute("SELECT * FROM staff WHERE id = {}".format(uid))
             data = dbCur.fetchone()
             if data is not None:
                 break
             cli.log('E', 'No user for given id:', uid)
-        name = input("Enter name[Default: {}]: ".format(data[1]))
+        name = input(cli.cols+"Enter Staff name[Default: {}]: ".format(data[1]))
         if not name:
             name = data[1]
-        uname = input("Enter username[Default: {}]: ".format(data[2]))
+        uname = input(cli.cols+"Enter userid[Default: {}]: ".format(data[2]))
         if not uname:
             uname = data[2]
-        passwd = input("Enter password[Default: {}]: ".format(data[3]))
+        passwd = input(cli.cols+"Enter password[Default: {}]: ".format(data[3]))
         if not passwd:
             passwd = data[3]
-        sts = validateInput("Enter Status[Default: {}]: ".format(bool(data[3])), None, bool)
+        sts = validateInput(cli.cols+"Enter Status[Default: {}]: ".format(data[4]), "AI")
         if not sts:
-            sts = str(bool(data[4]))
-        query = "UPDATE staff SET name='{}',username='{}',passwd='{}',status={} WHERE id = {}" \
-                .format(name, uname, passwd, int(sts == "True"), uid)
+            sts = data[4]
+        query = "UPDATE staff SET name='{}',userid='{}',passwd='{}',status='{}' WHERE id = {}" \
+                .format(name, uname, passwd, sts, uid)
         dbCur.execute(query)
         conn.commit()
         cli.log('S', "Updated user sucessfully!")
@@ -80,7 +80,7 @@ def staffMan(dbCur, userData):
         if opt == "All":
             query = "SELECT * FROM staff"
         elif opt == "Search":
-            uid = validateInput("Enter the user id: ", None, int)
+            uid = validateInput(cli.cols+"Enter the user id: ", None, int)
             query = "SELECT * FROM staff WHERE id = {}".format(uid)
         dbCur.execute(query)
         data = dbCur.fetchall()
@@ -91,11 +91,11 @@ def staffMan(dbCur, userData):
 
     elif opt == "Delete user":
         print("-"*10)
-        print(cli.colors.bold + "Deleting user", cli.colors.reset)
+        print(cli.cols+cli.colors.bold + "Deleting user", cli.colors.reset)
         query = "SELECT * FROM staff"
         dbCur.execute(query)
         print(cli.genTable(header + dbCur.fetchall()))
-        uid = validateInput("Enter the user id to delete: ", None, int)
+        uid = validateInput(cli.cols+"Enter the user id to delete: ", None, int)
         dbCur.execute("DELETE FROM staff WHERE id = {}".format(uid))
         conn.commit()
         cli.log('S', "Deleted user sucessfully!")
@@ -107,12 +107,12 @@ def custMan(dbCur, userData):
     opt = cli.inputLOV("How would you like to manage customers?", options)
 
     if opt == "Add new customer":
-        print("-"*10)
-        print(cli.colors.bold + "Adding new customer", cli.colors.reset)
-        name = input("Enter name of the customer: ")
-        ckind = validateInput("Enter customer kind[(S)tudent/s(T)aff]: ", "ST")
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Adding new customer", cli.colors.reset)
+        name = input(cli.cols+"Enter name of the customer: ")
+        ckind = validateInput(cli.cols+"Enter customer kind[(S)tudent/s(T)aff]: ", "ST")
         dbCur.execute("SELECT MAX(custId)+1 FROM customer")
-        query = "INSERT INTO customer VALUES ({}, '{}', '{}', 1)" \
+        query = "INSERT INTO customer VALUES ({}, '{}', '{}', 'A')" \
                 .format(dbCur.fetchone()[0], name, kindSwitch[ckind])
         dbCur.execute(query)
         conn.commit()
@@ -126,27 +126,25 @@ def custMan(dbCur, userData):
         dbCur.execute(query)
         print(cli.genTable(header + dbCur.fetchall()))
         while True:
-            cid = validateInput("Enter the custId to edit: ", None, int)
+            cid = validateInput(cli.cols+"Enter the custId to edit: ", None, int)
             dbCur.execute("SELECT * FROM customer WHERE custId = {}".format(cid))
             data = dbCur.fetchone()
             if data is not None:
                 break
             cli.log('E', 'No customer for given id:', cid)
-        custId = validateInput("Enter custId[Default: {}]: ".format(data[0]), None, int)
+        custId = validateInput(cli.cols+"Enter custId[Default: {}]: ".format(data[0]), None, int)
         if not custId:
             custId = data[0]
         name = input("Enter name[Default: {}]: ".format(data[1]))
         if not name:
             name = data[1]
-        ckind = validateInput("Enter customer kind[(S)tudent/s(T)aff][Default: {}]: ".format(data[2]), "TS")
+        ckind = validateInput(cli.cols+"Enter customer kind[(S)tudent/s(T)aff][Default: {}]: ".format(data[2]), "TS")
         ckind = kindSwitch.get(ckind, data[2])
-        sts = validateInput("Enter Status[Default: {}]: ".format(bool(data[3])), None, bool)
-        print(repr(sts))
+        sts = validateInput(cli.cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: ".format(data[3]), "AI")
         if not sts:
-            sts = str(bool(data[3]))
-        print(repr(sts))
-        query = "UPDATE customer SET custId={},name='{}',custType='{}',status={} WHERE custId = {}" \
-                .format(custId, name, ckind, int(sts == 'True'), cid)
+            sts = data[3]
+        query = "UPDATE customer SET custId={},name='{}',custType='{}',status='{}' WHERE custId = {}" \
+                .format(custId, name, ckind, sts, cid)
         dbCur.execute(query)
         conn.commit()
         cli.log('S', "Updated customer sucessfully!")
@@ -156,7 +154,7 @@ def custMan(dbCur, userData):
         if opt == "All":
             query = "SELECT * FROM customer"
         elif opt == "Search":
-            cid = validateInput("Enter the custId: ", None, int)
+            cid = validateInput(cli.cols+"Enter the custId: ", None, int)
             query = "SELECT * FROM customer WHERE custId = {}".format(cid)
         dbCur.execute(query)
         data = dbCur.fetchall()
@@ -167,7 +165,7 @@ def custMan(dbCur, userData):
 
     elif opt == "Delete customer":
         print("-"*10)
-        print(cli.colors.bold + "Deleting customer", cli.colors.reset)
+        print(cli.cols+cli.colors.bold + "Deleting customer", cli.colors.reset)
         query = "SELECT * FROM customer"
         dbCur.execute(query)
         print(cli.genTable(header + dbCur.fetchall()))
@@ -178,31 +176,31 @@ def custMan(dbCur, userData):
        
 def mainMenu(dbCur, userData):
     while True:
-        options = ["Manage Staffs", "Manage Customers", "Add new Item", "Manage Daily Stock",
-                   "Manage Sales", "Exit"]
+        options = ["User control", "Manage Customers", "Add new Item", "Daily Stock receipt",
+                   "Daily Sales entry", "Exit"]
         opt = cli.inputLOV("What would you like to do?", options)
-        if opt == "Manage Staffs":
+        if opt == "User control":
             if userData['name'] != 'Administrator':
                 cli.log('E', "User", userData['name'], "doesn't have rights to manage users!")
             else:
                 staffMan(dbCur, userData)
         elif opt == "Manage Customers":
             if userData['name'] != 'Administrator':
-                cli.log('E', "User", userData['name'], "doesn't have rights to manage users!")
+                cli.log('E', "User", userData['name'], "doesn't have rights to manage customers!")
             else:
                 custMan(dbCur, userData)
         elif opt == "Add new Item":
             raise NotImplementedError
-        elif opt == "Manage Daily Stock":
+        elif opt == "Daily Stock receipt":
             raise NotImplementedError
-        elif opt == "Manage Sales":
+        elif opt == "Daily Sales entry":
             raise NotImplementedError
         elif opt == "Exit":
             print(cli.cols, f"Logging out user: {userData['name']}...")
             break
     
     cli.log('S', "Successfully logged out!")
-    print(cli.cols, "Thank you for using our application. See you soon!")
+    print(cli.cols, "Thank you")
 
 if conn.is_connected():
     cur = conn.cursor()
@@ -211,7 +209,7 @@ if conn.is_connected():
     cli.printBanner("Welcome to Cafeteria Management System")
     uname = input(cli.cols + "Enter Username: ")
     pswd = input(cli.cols + "Enter password: ")
-    cur.execute(f"SELECT name, passwd FROM staff WHERE username = '{uname}' AND status = 1")
+    cur.execute(f"SELECT name, passwd FROM staff WHERE userId = '{uname}' AND status = 'A'")
     data = cur.fetchall()
     if data != []:
         if data[0][1] == pswd:
