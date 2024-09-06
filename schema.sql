@@ -11,7 +11,7 @@ CREATE TABLE Staff (
 	name VARCHAR(25),
 	username VARCHAR(20),
 	passwd VARCHAR(64),
-	status BOOLEAN
+	status VARCHAR(1) CHECK(status IN ('A', 'I'))
 );
 
 DROP TABLE IF EXISTS Items;
@@ -35,7 +35,7 @@ CREATE TABLE Customer (
 	custId INT,
 	name VARCHAR(25),
 	custType VARCHAR(7) CHECK(custType IN ('Student', 'Staff')),
-	status BOOLEAN
+	status VARCHAR(1) CHECK(status IN ('A', 'I'))
 );
 
 DROP TABLE IF EXISTS Sales;

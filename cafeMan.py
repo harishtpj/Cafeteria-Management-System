@@ -173,10 +173,56 @@ def custMan(dbCur, userData):
         dbCur.execute("DELETE FROM customer WHERE custId = {}".format(cid))
         conn.commit()
         cli.log('S', "Deleted user sucessfully!")
-       
+
+def menuMan(dbCur, userData):
+    options = ["Add item", "View items", "Update rate", "Delete item"]
+    header = [("itemCode", "itemName", "rate")]
+    opt = cli.inputLOV("Choose an operation", options)
+
+    if opt == "Add item":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Adding new menu Item", cli.colors.reset)
+        name = input(cli.cols+"Enter name of menu item: ")
+        rate = validateInput(cli.cols+"Enter rate: ", None, float)
+        dbCur.execute("SELECT MAX(itemCode)+1 FROM items")
+        dbCur.execute("INSERT INTO items VALUES ({}, '{}', {})".format(dbCur.fetchone()[0], name, rate))
+        conn.commit()
+        cli.log('S', "Added new menu item successfully!")
+
+    elif opt == "View items":
+        dbCur.execute("SELECT * FROM items")
+        print(cli.genTable(header + dbCur.fetchall()))
+
+    elif opt == "Update rate":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Updating rate", cli.colors.reset)
+        dbCur.execute("SELECT * FROM items")
+        print(cli.genTable(header + dbCur.fetchall()))
+        while True:
+            icd = validateInput(cli.cols+"Enter the itemCode to edit: ", None, int)
+            dbCur.execute("SELECT * FROM items WHERE itemCode = {}".format(icd))
+            data = dbCur.fetchone()
+            if data is not None:
+                break
+            cli.log('E', 'No item for given itemCode:', icd)
+        rt = validateInput(cli.cols+"Enter new rate: ", None, float)
+        dbCur.execute("UPDATE items SET rate = {} where itemCode = {}".format(rt,icd))
+        conn.commit()
+        cli.log('S', "Updated rate sucessfully!")
+
+    elif opt == "Delete item":
+        print(cli.cols+"-"*10)
+        print(cli.cols+cli.colors.bold + "Deleting menu item", cli.colors.reset)
+        dbCur.execute("SELECT * FROM items")
+        print(cli.genTable(header + dbCur.fetchall()))
+        icd = validateInput(cli.cols+"Enter the itemCode to delete: ", None, int)
+        dbCur.execute("DELETE FROM items WHERE itemCode = {}".format(icd))
+        conn.commit()
+        cli.log('S', "Deleted item sucessfully!")
+
 def mainMenu(dbCur, userData):
     while True:
-        options = ["User control", "Manage Customers", "Add new Item", "Daily Stock receipt",
+        options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
                    "Daily Sales entry", "Exit"]
         opt = cli.inputLOV("What would you like to do?", options)
         if opt == "User control":
@@ -189,8 +235,8 @@ def mainMenu(dbCur, userData):
                 cli.log('E', "User", userData['name'], "doesn't have rights to manage customers!")
             else:
                 custMan(dbCur, userData)
-        elif opt == "Add new Item":
-            raise NotImplementedError
+        elif opt == "Add menu Item":
+            menuMan(dbCur, userData)
         elif opt == "Daily Stock receipt":
             raise NotImplementedError
         elif opt == "Daily Sales entry":
