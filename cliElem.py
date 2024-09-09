@@ -92,8 +92,10 @@ def genTable(data, header=True, footer=False, colp=True):
         table.append(format_row(row))
     if footer:
         table.append(border.replace("-", "="))
-    table.append(format_row(data[-1]))
+    if len(data) != 1:
+        table.append(format_row(data[-1]))
     table.append(border)
     
     return "\n".join([cols+row if colp else row for row in table])
+
 

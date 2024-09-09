@@ -24,6 +24,11 @@ def validateInput(prompt, vals=None, itype=str):
         except ValueError:
             log('E', "Invalid input typed. Please try again")
 
+def inputDate(prompt):
+    d = validateInput("Enter date[1-31]: ", None, int)
+    m = validateInput("Enter month[1-12]: ", None, int)
+    y = validateInput("Enter year[YYYY]: ", None, int)
+    return "{}-{}-{}".format(y,m,d)
 
 def staffMan(dbCur, userData):
     options = ["Add new user", "Edit user details", "View users", "Delete user"]
@@ -326,7 +331,7 @@ def printBill(cid, dt, custData, billData):
 
 
 def salesMan(dbCur, userData):
-    options = ["Add bill", "Update bill", "Delete bill"]
+    options = ["Add bill", "Delete bill"]
     itemHdr = [("itemCode", "itemName", "quantity")]
     opt = inputLOV("Choose an operation", options)
 
@@ -371,45 +376,59 @@ def salesMan(dbCur, userData):
             billData = [('SNO', 'Item', 'Quantity', 'Price')] + billData + [('', '', 'Total', total)]
             printBill(custData['custCode'], dt, custData, billData)
 
-    elif opt == "View receipt":
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
-        print(genTable(header + dbCur.fetchall()))
-
-    elif opt == "Update quantity":
+    elif opt == "Delete bill":
         print(cols+"-"*10)
-        print(cols+colors.bold + "Updating quantity", colors.reset)
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
-        print(genTable(header + dbCur.fetchall()))
-        while True:
-            icd = validateInput(cols+"Enter the itemCode to update: ", None, int)
-            dbCur.execute("SELECT * FROM items WHERE itemCode = {}".format(icd))
-            data = dbCur.fetchone()
-            if data is not None:
-                break
-            log('E', 'No item for given itemCode:', icd)
-        qty = validateInput(cols+"Enter new quantity: ", None, int)
-        dbCur.execute("UPDATE dailyStock SET quantity = {} WHERE itemCode = {} \
-                AND receiptDate = current_date()".format(qty,icd))
+        print(cols+colors.bold + "Deleting bill", colors.reset)
+        dbCur.execute("SELECT DISTINCT s.tokenId, c.name FROM sales s, customer c WHERE s.custCode = c.custId \
+                AND s.tDate = current_date()")
+        print(genTable([('tokenId', 'Customer Name')] + dbCur.fetchall()))
+        tid = validateInput(cols+"Enter the tokenId to delete: ", None, int)
+        if tid <= 0:
+            dbCur.execute("DELETE FROM sales WHERE tDate = current_date() AND tokenId = {}".format(tid))
+        else:
+            log('E', "Invalid tokenId:", tid)
         conn.commit()
-        log('S', "Updated quantity sucessfully!")
+        log('S', "Deleted bill sucessfully!")
 
-    elif opt == "Delete item":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Deleting receipt item", colors.reset)
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
-        print(genTable(header + dbCur.fetchall()))
-        icd = validateInput(cols+"Enter the itemCode to delete: ", None, int)
-        dbCur.execute("DELETE FROM dailyStock WHERE receiptDate = current_date() AND itemCode = {}".format(icd))
-        conn.commit()
-        log('S', "Deleted item sucessfully!")
+def repMan(dbCur, userData):
+    options = ["Bill History", "Sales Statistics"]
+    opt = inputLOV("Enter your choice: ", options)
+
+    if opt == "Bill History":
+        dt = inputDate("Date of History")
+        dbCur.execute("SELECT DISTINCT s.tokenId, c.custId, c.name FROM sales s, customer c \
+                      WHERE tDate = '{}' AND c.custId = s.custCode".format(dt))
+        data = dbCur.fetchall()
+        if data == []:
+            log('E', 'No records found on date:', dt)
+        else:
+            custData = {}
+            print(genTable([('tokenId', 'custId', 'Customer Name')] + data))
+            custData['Token ID'] = validateInput("Enter token id: ", None, int)
+            for row in data:
+                if row[0] == custData['Token ID']:
+                    custData['custCode'] = row[1]
+                    custData['Customer Name'] = row[2]
+            dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate \
+                    FROM items i, sales s WHERE i.itemCode = s.itemCode AND \
+                    s.custCode = {} AND s.tokenId = {} AND s.tDate = '{}'"\
+                    .format(custData['custCode'], custData['Token ID'], dt))
+            billData = dbCur.fetchall()
+            total = 0
+            for sno in range(len(billData)):
+                total += billData[sno][2]
+                billData[sno] = (sno+1,) + billData[sno]
+            billData = [('SNO', 'Item', 'Quantity', 'Price')] + billData + [('', '', 'Total', total)]
+            printBill(custData['custCode'], dt, custData, billData)
+
+    elif opt == "Sales Statistics":
+        raise NotImplementedError
+
 
 def mainMenu(dbCur, userData):
     while True:
         options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
-                   "Daily Sales entry", "Exit"]
+                   "Daily Sales entry", "Report generation", "Exit"]
         opt = inputLOV("What would you like to do?", options)
         if opt == "User control":
             if userData['name'] != 'Administrator':
@@ -427,6 +446,8 @@ def mainMenu(dbCur, userData):
             stockMan(dbCur, userData)
         elif opt == "Daily Sales entry":
             salesMan(dbCur, userData)
+        elif opt == "Report generation":
+            repMan(dbCur, userData)
         elif opt == "Exit":
             print(cols, f"Logging out user: {userData['name']}...")
             break
