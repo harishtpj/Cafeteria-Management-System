@@ -41,7 +41,7 @@ CREATE TABLE Customer (
 DROP TABLE IF EXISTS Sales;
 CREATE TABLE Sales (
 	tokenId INT,
-	tDate DATETIME,
+	tDate DATE,
 	custCode INT,
 	itemCode INT,
 	qty INT

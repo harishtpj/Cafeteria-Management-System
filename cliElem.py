@@ -41,22 +41,27 @@ class colors:
         lightgrey = '\033[47m'
 
 
-def printBanner(*args, sep=' '):
+def printBanner(*args, sep=' ', asStr=False):
     pStr = sep.join(args)
-    print(cols, f"+-{'-'*len(pStr)}-+")
-    print(cols, f"| {colors.blink}{colors.bold}{pStr}{colors.reset} |")
-    print(cols, f"+-{'-'*len(pStr)}-+")
+    border = cols + "+-{}-+".format('-'*len(pStr)) + "\n"
+    if not asStr:
+        pStr = colors.blink+colors.bold+pStr+colors.reset
+    banStr = ""
+    banStr += border + cols + "| {} |".format(pStr) + '\n' + border
+    if not asStr:
+        print(banStr)
+    return banStr
 
 def log(kind='I', *args):
     kinds = {
-            'I': ('INFO', colors.bold),
-            'E': ('ERROR', colors.fg.red),
-            'S': ('SUCCESS', colors.fg.green),
-            'W': ('WARNING', colors.fg.yellow)
+            'I': ('INFO', colors.bold, ''),
+            'E': ('ERROR', colors.fg.red, '\a'),
+            'S': ('SUCCESS', colors.fg.green, ''),
+            'W': ('WARNING', colors.fg.yellow, '\a')
 
     }
-    k, c = kinds[kind]
-    print(cols, f"{c}{k}:", *args, colors.reset)
+    k, c, a= kinds[kind]
+    print(cols, f"{c}{k}:", *args, a, colors.reset)
 
 def inputLOV(prompt, options):
     print("\n", prompt)
@@ -71,7 +76,7 @@ def inputLOV(prompt, options):
             log('W', "Invalid option selected. Please try again!")
 
 
-def genTable(data, header=True, colp=True):
+def genTable(data, header=True, footer=False, colp=True):
     col_widths = [max(len(str(item)) for item in col) for col in zip(*data)]
     
     def format_row(row):
@@ -83,8 +88,11 @@ def genTable(data, header=True, colp=True):
     table.append(format_row(data[0]))
     if header:
         table.append(border.replace("-", "="))
-    for row in data[1:]:
+    for row in data[1:-1]:
         table.append(format_row(row))
+    if footer:
+        table.append(border.replace("-", "="))
+    table.append(format_row(data[-1]))
     table.append(border)
     
     return "\n".join([cols+row if colp else row for row in table])
