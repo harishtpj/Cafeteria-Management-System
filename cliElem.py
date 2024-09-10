@@ -69,7 +69,9 @@ def inputLOV(prompt, options):
     while True:
         try:
             optId = int(input(cols+colors.bold+"ENTER AN OPTION: "+colors.reset))
-            return options[optId-1]
+            if optId > 0:
+                return options[optId-1]
+            raise IndexError
         except ValueError:
             log('W', "Invalid input typed. Please try again!")
         except IndexError:
