@@ -1,68 +1,148 @@
 # The School Cafeteria Management System
-# Written by M.V.Harish Kumar - Grade 12 'A' 
-# on 05-09-2024
+# Written by M.V.Harish Kumar - Grade 12 'A' on 05-09-2024
 import mysql.connector as ms
-from cliElem import *
 
-conn = ms.connect(host="localhost", user="cafeAdmin", passwd="cafe@p$wd", db="cafeteria")
+# ********** Terminal Formatting codes and settings **********
+cols = " " * 40
 
+# Colour Codes
+clrReset = '\033[00m'
+clrBold = '\033[01m'
+clrBlink = '\033[05m'
+clrClear = '\033[2J\033[H'
+clrRed = '\033[31m'
+clrGreen = '\033[32m'
+clrYellow = '\033[93m'
+
+# ********** Logging Function **********
+def log(kind='I', *args, sep=' '):
+    kinds = {
+            'I': ('INFO', clrBold, ''),
+            'E': ('ERROR', clrRed, '\a'),
+            'S': ('SUCCESS', clrGreen, ''),
+            'W': ('WARNING', clrYellow, '\a')
+    }
+    k, c, a = kinds[kind]
+    print(a, cols, "{}{}:".format(c,k), *args, clrReset, sep=sep)
+
+# ********** Connect to Database **********
+try:
+    dbConnError = False
+    conn = ms.connect(host="localhost", user="cafeAdmin", passwd="cafe@p$wd", db="cafeteria")
+except:
+    dbConnError = True
+    log('E', "\tServer Error Occured", "\tCan't connect to Database Server", "\tPlease try again", sep='\n')
+
+# ********** CMDLINE Printing and Formatting Helpers **********
+def printBanner(*args, sep=' ', asStr=False):
+    pStr = sep.join(args)
+    border = cols + "+-{}-+".format('-'*len(pStr)) + "\n"
+    if not asStr:
+        pStr = clrBlink + clrBold + pStr + clrReset
+    banStr = border + cols + "| {} |".format(pStr) + '\n' + border
+    if not asStr:
+        print(banStr)
+    return banStr
+
+def printTitle(titleStr):
+    print(cols + '-' * len(titleStr))
+    print(cols + clrBold + titleStr, clrReset)
+
+def genTable(data, header=True, footer=False, colp=True):
+    col_widths = [max(len(str(item)) for item in col) for col in zip(*data)]
+    border = "+-" + "-+-".join("-" * width for width in col_widths) + "-+"
+    table = [border]
+    
+    def format_row(row):
+        return "| " + " | ".join(f"{str(item).ljust(width)}" for item, width in zip(row, col_widths)) + " |"
+    
+    table.append(format_row(data[0]))
+    if header:
+        table.append(border.replace("-", "="))
+    for row in data[1:-1]:
+        table.append(format_row(row))
+    if footer:
+        table.append(border.replace("-", "="))
+    if len(data) != 1:
+        table.append(format_row(data[-1]))
+    table.append(border)
+    
+    return "\n".join([cols+row if colp else row for row in table])
+
+# ********** Functions to sanitize inputs **********
 def validateInput(prompt, vals=None, itype=str):
     while True:
         try:
             data = input(prompt)
-            if itype == bool:
-                if data not in "TF":
-                    log('E', "Invalid input for boolean data. Please try again")
-                else:
-                    return {'T': 'True', 'F': 'False'}.get(data, "")
-            elif vals is not None and data not in vals:
-                log('E', "Invalid input for given options. Please try again")
-            else:
-                if itype in [int, float]:
-                    return itype("0"+data)
+            if itype != str:
+                data = itype("0"+data)
+            if vals is None or data in vals:
                 return itype(data)
+            log('E', "Invalid input for given options. Please try again")
         except ValueError:
             log('E', "Invalid input typed. Please try again")
 
+def inputLOV(prompt, options):
+    print("\n", prompt)
+    print(genTable([((i+1), options[i]) for i in range(len(options))], False))
+    optId = validateInput(cols+clrBold+"ENTER AN OPTION: "+clrReset,
+                          range(1, len(options)+1), int)
+    return options[optId-1]
+
 def inputDate(prompt):
     print(cols+prompt)
-    d = validateInput(cols+"Enter date[1-31]: ", [str(n) for n in range(1, 32)], int)
-    m = validateInput(cols+"Enter month[1-12]: ", [str(n) for n in range(1, 13)], int)
-    y = validateInput(cols+"Enter year[YYYY]: ", ['2024'], int)
+    d = validateInput(cols+"Enter date[1-31]: ", range(1, 32), int)
+    m = validateInput(cols+"Enter month[1-12]: ", range(1, 13), int)
+    y = validateInput(cols+"Enter year[YYYY]: ", range(2024, 2025), int)
     return "{}-{}-{}".format(y,m,d)
 
-def staffMan(dbCur, userData):
+# ********** Function to generate Reports **********
+def printReport(tagline, custData, repData, total=True):
+    kind = validateInput("Do you want to print {} on screen[y/n]: ".format(tagline), "yn")
+    if kind == "y":
+        printBanner("The Velammal Cafeteria - {} Report".format(tagline))
+        for k, v in custData.items():
+            print(cols,"{}: {}".format(k, v))
+        print(genTable(repData, footer=total))
+    else:
+        log('I', "Printing to file")
+        bname = "{}_{}_{}.txt".format(tagline.replace(' ', ''), custData.get('custCode', ''), 
+                                      custData['Date'].replace('-', ''))
+        with open(bname, 'w') as billF:
+            billF.write(printBanner("The Velammal Cafeteria - {} Report".format(tagline), asStr=True)+'\n')
+            for k, v in custData.items():
+                billF.write(cols+"{}: {}\n".format(k, v))
+            billF.write(genTable(repData, footer=True))
+        log('S', "Succesfully printed", tagline, "report to", bname)
+
+# ********** Function to Manage Staff Details **********
+def staffMan(dbCur):
     options = ["Add new user", "Edit user details", "View users", "Delete user"]
-    header = [('id', 'name', 'username', 'password', 'status')] 
+    header = [('ID', 'Name', 'Username', 'Password', 'Status')]
     opt = inputLOV("How would you like to manage staffs?", options)
 
     if opt == "Add new user":
-        print(cols+"-"*10)
-        print(cols + colors.bold + "Adding new user", colors.reset)
+        printTitle("Adding new user")
         name = input(cols+"Enter Staff name: ")
         uname = input(cols+"Enter userid for user: ")
         passwd = input(cols+"Enter password for user: ")
         dbCur.execute("SELECT MAX(id)+1 FROM staff")
-        query = "INSERT INTO staff VALUES ({}, '{}', '{}', '{}', 'A')" \
-                .format(dbCur.fetchone()[0], name, uname, passwd)
-        dbCur.execute(query)
+        dbCur.execute("INSERT INTO staff VALUES ({}, '{}', '{}', '{}', 'A')"\
+                      .format(dbCur.fetchone()[0], name, uname, passwd))
         conn.commit()
         log('S', "Added new user sucessfully!")
     
     elif opt == "Edit user details":
-        print("-"*10)
-        print(cols, colors.bold + "Updating User", colors.reset)
+        printTitle("Updating User")
         log('I', "Leaving a field empty will retain the previous value")
-        query = "SELECT * FROM staff"
-        dbCur.execute(query)
-        print(genTable(header + dbCur.fetchall()))
-        while True:
-            uid = validateInput(cols+"Enter the user id to edit: ", None, int)
-            dbCur.execute("SELECT * FROM staff WHERE id = {}".format(uid))
-            data = dbCur.fetchone()
-            if data is not None:
+        dbCur.execute("SELECT * FROM staff")
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        uid = validateInput(cols+"Enter the user id to edit: ", [x[0] for x in table], int)
+        for rec in table:
+            if rec[0] == uid:
+                data = rec
                 break
-            log('E', 'No user for given id:', uid)
         name = input(cols+"Enter Staff name[Default: {}]: ".format(data[1]))
         if not name:
             name = data[1]
@@ -72,12 +152,11 @@ def staffMan(dbCur, userData):
         passwd = input(cols+"Enter password[Default: {}]: ".format(data[3]))
         if not passwd:
             passwd = data[3]
-        sts = validateInput(cols+"Enter Status[Default: {}]: ".format(data[4]), "AI")
+        sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: ".format(data[4]), "AI")
         if not sts:
             sts = data[4]
-        query = "UPDATE staff SET name='{}',userid='{}',passwd='{}',status='{}' WHERE id = {}" \
-                .format(name, uname, passwd, sts, uid)
-        dbCur.execute(query)
+        dbCur.execute("UPDATE staff SET name='{}',userid='{}',passwd='{}',status='{}'\
+                      WHERE id = {}".format(name, uname, passwd, sts, uid))
         conn.commit()
         log('S', "Updated user sucessfully!")
 
@@ -91,67 +170,59 @@ def staffMan(dbCur, userData):
         dbCur.execute(query)
         data = dbCur.fetchall()
         if data == []:
-            log('I', f"No such user with id {uid} found")
+            log('I', "No such user with id {} found".format(uid))
         else:
             print(genTable(header + data))
 
     elif opt == "Delete user":
-        print("-"*10)
-        print(cols+colors.bold + "Deleting user", colors.reset)
-        query = "SELECT * FROM staff"
-        dbCur.execute(query)
-        print(genTable(header + dbCur.fetchall()))
-        uid = validateInput(cols+"Enter the user id to delete: ", None, int)
+        printTitle("Deleting user")
+        dbCur.execute("SELECT * FROM staff")
+        data = dbCur.fetchall()
+        print(genTable(header + data))
+        uid = validateInput(cols+"Enter the user id to delete: ", [x[0] for x in data], int)
         dbCur.execute("DELETE FROM staff WHERE id = {}".format(uid))
         conn.commit()
         log('S', "Deleted user sucessfully!")
 
-def custMan(dbCur, userData):
+# ********** Function to Manage Customer Details **********
+def custMan(dbCur):
     options = ["Add new customer", "Edit customer details", "View customers", "Delete customer"]
-    header = [('custId', 'name', 'type', 'status')] 
+    header = [('custCode', 'Name', 'Type', 'Status')] 
     kindSwitch = {'S': 'Student', 'T': 'Staff'}
     opt = inputLOV("How would you like to manage customers?", options)
 
     if opt == "Add new customer":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Adding new customer", colors.reset)
+        printTitle("Adding new customer")
         name = input(cols+"Enter name of the customer: ")
         ckind = validateInput(cols+"Enter customer kind[(S)tudent/s(T)aff]: ", "ST")
-        dbCur.execute("SELECT MAX(custId)+1 FROM customer")
-        query = "INSERT INTO customer VALUES ({}, '{}', '{}', 'A')" \
-                .format(dbCur.fetchone()[0], name, kindSwitch[ckind])
-        dbCur.execute(query)
+        dbCur.execute("SELECT MAX(custCode)+1 FROM customer")
+        dbCur.execute("INSERT INTO customer VALUES ({}, '{}', '{}', 'A')"\
+                      .format(dbCur.fetchone()[0], name, kindSwitch[ckind]))
         conn.commit()
         log('S', "Added new customer sucessfully!")
     
     elif opt == "Edit customer details":
-        print("-"*10)
-        print(cols, colors.bold + "Updating customer", colors.reset)
+        printTitle("Updating customer")
         log('I', "Leaving a field empty will retain the previous value")
-        query = "SELECT * FROM customer"
-        dbCur.execute(query)
-        print(genTable(header + dbCur.fetchall()))
-        while True:
-            cid = validateInput(cols+"Enter the custId to edit: ", None, int)
-            dbCur.execute("SELECT * FROM customer WHERE custId = {}".format(cid))
-            data = dbCur.fetchone()
-            if data is not None:
+        dbCur.execute("SELECT * FROM customer")
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        cid = validateInput(cols+"Enter the custCode to edit: ", [x[0] for x in table], int)
+        for rec in table:
+            if rec[0] == cid:
+                data = rec
                 break
-            log('E', 'No customer for given id:', cid)
-        custId = validateInput(cols+"Enter custId[Default: {}]: ".format(data[0]), None, int)
-        if not custId:
-            custId = data[0]
-        name = input("Enter name[Default: {}]: ".format(data[1]))
+        name = input(cols+"Enter name[Default: {}]: ".format(data[1]))
         if not name:
             name = data[1]
-        ckind = validateInput(cols+"Enter customer kind[(S)tudent/s(T)aff][Default: {}]: ".format(data[2]), "TS")
+        ckind = validateInput(cols+"Enter customer kind[(S)tudent/s(T)aff][Default: {}]: "\
+                              .format(data[2]), "TS")
         ckind = kindSwitch.get(ckind, data[2])
         sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: ".format(data[3]), "AI")
         if not sts:
             sts = data[3]
-        query = "UPDATE customer SET custId={},name='{}',custType='{}',status='{}' WHERE custId = {}" \
-                .format(custId, name, ckind, sts, cid)
-        dbCur.execute(query)
+        dbCur.execute("UPDATE customer SET name='{}',custType='{}',status='{}'\
+                      WHERE custCode = {}".format(name, ckind, sts, cid))
         conn.commit()
         log('S', "Updated customer sucessfully!")
 
@@ -160,34 +231,33 @@ def custMan(dbCur, userData):
         if opt == "All":
             query = "SELECT * FROM customer"
         elif opt == "Search":
-            cid = validateInput(cols+"Enter the custId: ", None, int)
-            query = "SELECT * FROM customer WHERE custId = {}".format(cid)
+            cid = validateInput(cols+"Enter the custCode: ", None, int)
+            query = "SELECT * FROM customer WHERE custCode = {}".format(cid)
         dbCur.execute(query)
         data = dbCur.fetchall()
         if data == []:
-            log('I', f"No such customer with code {cid} found")
+            log('I', "No such customer with code {} found".format(cid))
         else:
             print(genTable(header + data))
 
     elif opt == "Delete customer":
-        print("-"*10)
-        print(cols+colors.bold + "Deleting customer", colors.reset)
-        query = "SELECT * FROM customer"
-        dbCur.execute(query)
-        print(genTable(header + dbCur.fetchall()))
-        cid = validateInput("Enter the custId to delete: ", None, int)
-        dbCur.execute("DELETE FROM customer WHERE custId = {}".format(cid))
+        printTitle("Deleting customer")
+        dbCur.execute("SELECT * FROM customer")
+        data = dbCur.fetchall()
+        print(genTable(header + data))
+        cid = validateInput("Enter the custCode to delete: ", [x[0] for x in data], int)
+        dbCur.execute("DELETE FROM customer WHERE custCode = {}".format(cid))
         conn.commit()
         log('S', "Deleted user sucessfully!")
 
-def menuMan(dbCur, userData):
+# ********** Function to Manage Menu items **********
+def menuMan(dbCur):
     options = ["Add item", "View items", "Update rate", "Delete item"]
-    header = [("itemCode", "itemName", "rate")]
+    header = [("itemCode", "Item Name", "Rate")]
     opt = inputLOV("Choose an operation", options)
 
     if opt == "Add item":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Adding new menu Item", colors.reset)
+        printTitle("Adding new menu Item")
         name = input(cols+"Enter name of menu item: ")
         rate = validateInput(cols+"Enter rate: ", None, float)
         dbCur.execute("SELECT MAX(itemCode)+1 FROM items")
@@ -200,182 +270,147 @@ def menuMan(dbCur, userData):
         print(genTable(header + dbCur.fetchall()))
 
     elif opt == "Update rate":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Updating rate", colors.reset)
+        printTitle("Updating rate")
         dbCur.execute("SELECT * FROM items")
-        print(genTable(header + dbCur.fetchall()))
-        while True:
-            icd = validateInput(cols+"Enter the itemCode to edit: ", None, int)
-            dbCur.execute("SELECT * FROM items WHERE itemCode = {}".format(icd))
-            data = dbCur.fetchone()
-            if data is not None:
-                break
-            log('E', 'No item for given itemCode:', icd)
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        icd = validateInput(cols+"Enter the itemCode to edit: ", [x[0] for x in table], int)
         rt = validateInput(cols+"Enter new rate: ", None, float)
         dbCur.execute("UPDATE items SET rate = {} where itemCode = {}".format(rt,icd))
         conn.commit()
         log('S', "Updated rate sucessfully!")
 
     elif opt == "Delete item":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Deleting menu item", colors.reset)
+        printTitle("Deleting menu item")
         dbCur.execute("SELECT * FROM items")
-        print(genTable(header + dbCur.fetchall()))
-        icd = validateInput(cols+"Enter the itemCode to delete: ", None, int)
+        data = dbCur.fetchall()
+        print(genTable(header + data))
+        icd = validateInput(cols+"Enter the itemCode to delete: ", [x[0] for x in data], int)
         dbCur.execute("DELETE FROM items WHERE itemCode = {}".format(icd))
         conn.commit()
         log('S', "Deleted item sucessfully!")
 
+# ********** Function to input Receipt Data **********
 def getReceiptData(dataTable):
     data = []
     opt = "y"
     while opt.lower() == 'y':
-        print(dataTable)
-        icd = validateInput(cols+"Enter itemCode: ", None, int)
+        print(genTable(dataTable))
+        icd = validateInput(cols+"Enter itemCode: ", [x[0] for x in dataTable[1:]], int)
         qty = validateInput(cols+"Enter quantity: ", None, int)
         data.append((icd, qty))
         opt = validateInput("Do you want to continue[y/n]: ", "yn")
     return data
 
-def stockMan(dbCur, userData):
+# ********** Function to Manage Daily Stock items **********
+def stockMan(dbCur):
     options = ["Add receipt", "View receipt", "Update quantity", "Delete item"]
-    header = [("itemCode", "itemName", "quantity")]
+    header = [("itemCode", "Item Name", "Quantity")]
     opt = inputLOV("Choose an operation", options)
 
     if opt == "Add receipt":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Adding new receipt", colors.reset)
-        
+        printTitle("Adding new receipt")
         dbCur.execute("SELECT * FROM items")
         dbCur.executemany("INSERT INTO dailyStock VALUES (%s, current_date(), %s)",
-                          getReceiptData(genTable(header + dbCur.fetchall())))
+                          getReceiptData(header + dbCur.fetchall()))
         conn.commit()
         log('S', "Added receipt successfully!")
 
     elif opt == "View receipt":
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
         print(genTable(header + dbCur.fetchall()))
 
     elif opt == "Update quantity":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Updating quantity", colors.reset)
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
-        print(genTable(header + dbCur.fetchall()))
-        while True:
-            icd = validateInput(cols+"Enter the itemCode to update: ", None, int)
-            dbCur.execute("SELECT * FROM items WHERE itemCode = {}".format(icd))
-            data = dbCur.fetchone()
-            if data is not None:
-                break
-            log('E', 'No item for given itemCode:', icd)
+        printTitle("Updating quantity")
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        icd = validateInput(cols+"Enter the itemCode to update: ", [x[0] for x in table], int)
         qty = validateInput(cols+"Enter new quantity: ", None, int)
-        dbCur.execute("UPDATE dailyStock SET quantity = {} WHERE itemCode = {} \
-                AND receiptDate = current_date()".format(qty,icd))
+        dbCur.execute("UPDATE dailyStock SET quantity = {} WHERE itemCode = {}\
+                      AND receiptDate = current_date()".format(qty,icd))
         conn.commit()
         log('S', "Updated quantity sucessfully!")
 
     elif opt == "Delete item":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Deleting receipt item", colors.reset)
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
-        print(genTable(header + dbCur.fetchall()))
-        icd = validateInput(cols+"Enter the itemCode to delete: ", None, int)
-        dbCur.execute("DELETE FROM dailyStock WHERE receiptDate = current_date() AND itemCode = {}".format(icd))
+        printTitle("Deleting receipt item")
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        icd = validateInput(cols+"Enter the itemCode to delete: ", [x[0] for x in table], int)
+        dbCur.execute("DELETE FROM dailyStock WHERE receiptDate = current_date()\
+                      AND itemCode = {}".format(icd))
         conn.commit()
         log('S', "Deleted item sucessfully!")
 
-def addBill(dbCur, tokId, custCode, query):
-    log('I', "Current Token id is", tokId) 
+def addBill(dbCur, tokId, query):
+    log('I', "Current Token id is", tokId)
     opt = "y"
     while opt.lower() == 'y':
         itemCodes = []
-        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i \
-                WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+        dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
         header = [("itemCode", "itemName", "quantity")]
-        print(genTable(header + dbCur.fetchall()))
-
-        icd = validateInput(cols+"Enter itemCode: ", None, int)
-
+        table = dbCur.fetchall()
+        print(genTable(header + table))
+        icd = validateInput(cols+"Enter itemCode: ", [x[0] for x in table], int)
         while True:
             qty = validateInput(cols+"Enter quantity: ", None, int)
-
-            dbCur.execute("SELECT quantity FROM dailyStock \
-                    WHERE itemCode = {} AND receiptDate = current_date()".format(icd))
-            threshold = dbCur.fetchone()[0]
+            for rec in table:
+                if rec[0] == icd:
+                    threshold = rec[2]
+                    break
             if qty <= threshold:
-                dbCur.execute("UPDATE dailyStock SET quantity = quantity - {} \
-                        WHERE itemCode = {} AND receiptDate = current_date()".format(qty, icd))
+                dbCur.execute("UPDATE dailyStock SET quantity = quantity - {} WHERE itemCode = {}\
+                              AND receiptDate = current_date()".format(qty, icd))
                 if icd in itemCodes:
-                    dbCur.execute("UPDATE sales SET qty = qty + {} WHERE tDate = current_date() \
-                            AND tokenId = {} AND itemCode = {}".format(tokId, icd))
+                    dbCur.execute("UPDATE sales SET qty = qty + {} WHERE tDate = current_date()\
+                                  AND tokenId = {} AND itemCode = {}".format(tokId, icd))
                 else:
+                    itemCodes.append(icd)
                     dbCur.execute(query % (icd, qty))
                 break
             log('E', "Only", threshold, "unit(s) is available, enter another value")
-
         opt = validateInput("Do you want to continue[y/n]: ", "yn")
-    return data
 
-def printReport(tagline, custData, repData, total=True):
-    kind = validateInput("Do you want to print {} on screen[y/n]: ".format(tagline), "yn")
-    if kind == "y":
-        printBanner("The Velammal Cafeteria - {} Report".format(tagline))
-        for k, v in custData.items():
-            print(cols,"{}: {}".format(k, v))
-        print(genTable(repData, footer=total))
-    else:
-        log('I', "Printing to file")
-        bname = "{}_{}_{}.txt".format(tagline.replace(' ', ''), custData.get('custCode', ''), custData['Date'].replace('-', ''))
-        with open(bname, 'w') as billF:
-            billF.write(printBanner("The Velammal Cafeteria - {} Report".format(tagline), asStr=True)+'\n')
-            for k, v in custData.items():
-                billF.write(cols+"{}: {}\n".format(k, v))
-            billF.write(genTable(repData, footer=True))
-        log('S', "Succesfully printed", tagline, "report to", bname)
-
-
-def salesMan(dbCur, userData):
+# ********** Function to Manage Daily Sales **********
+def salesMan(dbCur):
     options = ["Add bill", "Update bill", "Delete bill"]
-    itemHdr = [("itemCode", "itemName", "quantity")]
+    itemHdr = [("itemCode", "Item Name", "Quantity")]
+    custHdr = [("custCode", "Name", "Type")]
+    billTokHdr = [('tokenId', 'Customer Name')]
     opt = inputLOV("Choose an operation", options)
 
     if opt == "Add bill":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Adding new bill", colors.reset)
+        printTitle("Adding new bill")
         custData = {}
-
         dbCur.execute("SELECT * FROM customer")
-        print(genTable(itemHdr + dbCur.fetchall()))
-        while True:
-            custData['custCode'] = validateInput(cols+"Enter the custId: ", None, int)
-            dbCur.execute("SELECT name FROM customer WHERE custId = {}".format(custData['custCode']))
-            data = dbCur.fetchone()
-            if data is not None:
-                custData['Name'] = data[0]
-                break
-            log('E', 'No customer for given id:', custData['custCode'])
-        
+        table = dbCur.fetchall()
+        print(genTable(custHdr + table))
+        custData['custCode'] = validateInput(cols+"Enter the custCode: ", [x[0] for x in table], int)
+        for rec in table:
+            if rec[0] == custData['custCode']:
+                custData['Name'] = rec[1]
         dbCur.execute("SELECT IFNULL(MAX(tokenId),0)+1 FROM sales WHERE tDate = current_date()")
         custData['Token ID'] = dbCur.fetchone()[0]
         query = "INSERT INTO sales VALUES({}, current_date(), {}, %s, %s)" \
                 .format(custData['Token ID'], custData['custCode'])
-        addBill(dbCur, custData['Token ID'], custData['custCode'], query)
-
+        addBill(dbCur, custData['Token ID'], query)
         conn.commit()
         log('S', "Added bill successfully!")
+
         pBill = validateInput("Do you want to print bill[y/n]: ", "yn")
         if pBill == 'y':
             dbCur.execute("SELECT current_date()")
             custData['Date'] = dbCur.fetchone()[0]
-            dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate \
-                    FROM items i, sales s WHERE i.itemCode = s.itemCode AND \
-                    s.custCode = {} AND s.tokenId = {} AND s.tDate = current_date()" \
-                    .format(custData['custCode'], custData['Token ID']))
-            billData = dbCur.fetchall()
-            total = 0
+            dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate FROM items i, sales s\
+                          WHERE i.itemCode = s.itemCode AND s.custCode = {}\
+                          AND s.tokenId = {} AND s.tDate = current_date()"\
+                          .format(custData['custCode'], custData['Token ID']))
+            billData, total = dbCur.fetchall(), 0
             for sno in range(len(billData)):
                 total += billData[sno][2]
                 billData[sno] = (sno+1,) + billData[sno]
@@ -383,72 +418,73 @@ def salesMan(dbCur, userData):
             printReport('Bill', custData, billData)
 
     elif opt == "Update bill":
-        print(cols+"-"*10)
-        print(cols+colors.bold+ "Updating bill", colors.reset)
-        dbCur.execute("SELECT DISTINCT s.tokenId, c.name FROM sales s, customer c WHERE s.custCode = c.custId \
-                    AND s.tDate = current_date()")
-        data = dbCur.fetchall()
-        print(genTable([('tokenId', 'Customer Name')] + data))
-        tid = validateInput(cols+"Enter the tokenId to update: ", [str(x[0]) for x in data], int)
-        dbCur.execute("SELECT s.itemcode, i.itemName, s.qty \
-                    FROM items i, sales s WHERE i.itemCode = s.itemCode \
-                    AND s.tokenId = {} AND s.tDate = current_date()".format(tid))
+        printTitle("Updating bill")
+        dbCur.execute("SELECT DISTINCT s.tokenId, c.name FROM sales s, customer c\
+                      WHERE s.custCode = c.custCode AND s.tDate = current_date()")
+        table = dbCur.fetchall()
+        print(genTable(billTokHdr + table))
+        tid = validateInput(cols+"Enter the tokenId to update: ", [x[0] for x in data], int)
+        dbCur.execute("SELECT s.itemcode, i.itemName, s.qty FROM items i, sales s\
+                      WHERE i.itemCode = s.itemCode AND s.tokenId = {}\
+                      AND s.tDate = current_date()".format(tid))
         billData = dbCur.fetchall()
-        print(genTable([('itemCode', 'Item', 'Quantity')] + billData))
-        icd = validateInput(cols+"Enter the itemCode to update: ", [str(x[0]) for x in billData], int)
+        print(genTable(itemHdr + billData))
+        icd = validateInput(cols+"Enter the itemCode to update: ", [x[0] for x in billData], int)
         newQty = validateInput(cols+"Enter the Decrease in quantity: ", None, int)
-        dbCur.execute("SELECT quantity FROM dailyStock \
-                        WHERE itemCode = {} AND receiptDate = current_date()".format(icd))
-        threshold = dbCur.fetchone()[0]
-        if newQty <= threshold:
-            dbCur.execute("UPDATE dailyStock SET quantity = quantity + {} \
-                    WHERE itemCode = {} AND receiptDate = current_date()".format(newQty, icd))
-            dbCur.execute("UPDATE sales SET qty = qty - {} \
-                    WHERE itemCode = {} AND tDate = current_date() AND tokenId = {}"\
-                    .format(newQty, icd, tid))
+        for rec in billData:
+            if rec[0] == icd:
+                prevQty = rec[2]
+                break 
+        if newQty <= prevQty:
+            dbCur.execute("UPDATE dailyStock SET quantity = quantity + {} WHERE itemCode = {}\
+                          AND receiptDate = current_date()".format(newQty, icd))
+            if newQty == prevQty:
+                dbCur.execute("DELETE FROM sales WHERE itemCode = {} AND tDate = current_date()\
+                              AND tokenId = {}".format(icd, tid))
+            else:
+                dbCur.execute("UPDATE sales SET qty = qty - {} WHERE itemCode = {}\
+                              AND tDate = current_date() AND tokenId = {}".format(newQty, icd, tid))
+        else:
+            log('W', 'Only decrease in quantity is supported. Add a new bill to increase quantity')
         conn.commit()
         log('S', "Updated Bill Successfully")
 
     elif opt == "Delete bill":
-        print(cols+"-"*10)
-        print(cols+colors.bold + "Deleting bill", colors.reset)
-        dbCur.execute("SELECT DISTINCT s.tokenId, c.name FROM sales s, customer c WHERE s.custCode = c.custId \
-                AND s.tDate = current_date()")
+        printTitle("Deleting bill")
+        dbCur.execute("SELECT DISTINCT s.tokenId, c.name FROM sales s, customer c\
+                      WHERE s.custCode = c.custCode AND s.tDate = current_date()")
         data = dbCur.fetchall()
-        print(genTable([('tokenId', 'Customer Name')] + data))
-        tid = validateInput(cols+"Enter the tokenId to update: ", [str(x[0]) for x in data], int)
-        if tid <= 0:
-            dbCur.execute("DELETE FROM sales WHERE tDate = current_date() AND tokenId = {}".format(tid))
-        else:
-            log('E', "Invalid tokenId:", tid)
+        print(genTable(billTokHdr + data))
+        tid = validateInput(cols+"Enter the tokenId of bill to delete: ", [str(x[0]) for x in data], int)
+        dbCur.execute("DELETE FROM sales WHERE tDate = current_date() AND tokenId = {}".format(tid))
         conn.commit()
         log('S', "Deleted bill sucessfully!")
 
-def repMan(dbCur, userData):
+# ********** Function to Manage Reports **********
+def repMan(dbCur):
     options = ["Bill History", "Sales Reconcilation", "Stock Receipt"]
     opt = inputLOV("Enter your choice: ", options)
-
     dt = inputDate("Date of History")
+
     if opt == "Bill History":
-        dbCur.execute("SELECT DISTINCT s.tokenId, c.custId, c.name FROM sales s, customer c \
-                      WHERE tDate = '{}' AND c.custId = s.custCode".format(dt))
+        dbCur.execute("SELECT DISTINCT s.tokenId, c.custCode, c.name FROM sales s, customer c\
+                      WHERE tDate = '{}' AND c.custCode = s.custCode".format(dt))
         data = dbCur.fetchall()
         if data == []:
             log('E', 'No records found on date:', dt)
         else:
             custData = {'Date': dt}
-            print(genTable([('tokenId', 'custId', 'Customer Name')] + data))
-            custData['Token ID'] = validateInput("Enter token id: ", None, int)
+            print(genTable([('Token ID', 'custCode', 'Customer Name')] + data))
+            custData['Token ID'] = validateInput("Enter token id: ", [x[0] for x in data], int)
             for row in data:
                 if row[0] == custData['Token ID']:
                     custData['custCode'] = row[1]
                     custData['Customer Name'] = row[2]
-            dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate \
-                    FROM items i, sales s WHERE i.itemCode = s.itemCode AND \
-                    s.custCode = {} AND s.tokenId = {} AND s.tDate = '{}'"\
-                    .format(custData['custCode'], custData['Token ID'], dt))
-            billData = dbCur.fetchall()
-            total = 0
+            dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate\
+                          FROM items i, sales s WHERE i.itemCode = s.itemCode AND\
+                          s.custCode = {} AND s.tokenId = {} AND s.tDate = '{}'"\
+                          .format(custData['custCode'], custData['Token ID'], dt))
+            billData, total = dbCur.fetchall(), 0
             for sno in range(len(billData)):
                 total += billData[sno][2]
                 billData[sno] = (sno+1,) + billData[sno]
@@ -457,17 +493,18 @@ def repMan(dbCur, userData):
 
     elif opt == "Sales Reconcilation":
         dbCur.execute("SELECT s.itemCode, i.itemName, d.quantity+SUM(s.qty), SUM(s.qty),\
-                d.quantity FROM sales s, items i, dailyStock d\
-                WHERE s.itemCode = i.itemCode AND d.itemCode = s.itemCode \
-                AND s.tDate = '{0}' AND d.receiptDate = '{0}'\
-                GROUP BY s.itemCode, d.itemCode, d.quantity".format(dt))
+                      d.quantity FROM sales s, items i, dailyStock d\
+                      WHERE s.itemCode = i.itemCode AND d.itemCode = s.itemCode\
+                      AND s.tDate = '{0}' AND d.receiptDate = '{0}'\
+                      GROUP BY s.itemCode, d.itemCode, d.quantity".format(dt))
         salesData = dbCur.fetchall()
         if salesData == []:
             log('E', 'No records found on date:', dt)
         else:
             for sno in range(len(salesData)):
                 salesData[sno] = (sno+1,) + salesData[sno]
-            salesData = [('SNO', 'itemCode', 'Name', 'Quantity imported', 'Quantity sold', 'Remaining')] + salesData
+            salesData = [('SNO', 'itemCode', 'Name', 'Quantity imported',
+                           'Quantity sold', 'Remaining')] + salesData
             printReport('Sales Reconcilation', {'Date': dt}, salesData, total=False)
 
     elif opt == "Stock Receipt":
@@ -481,33 +518,33 @@ def repMan(dbCur, userData):
             for sno in range(len(receiptData)):
                 total += receiptData[sno][2]
                 receiptData[sno] = (sno+1,) + receiptData[sno]
-            receiptData = [('SNO', 'itemCode', 'Name', 'Quantity')] + receiptData + [('', '', 'Total', total)]
-            printReport('Stock Receipt', {'Date': dt}, receiptData)
+            receiptData = [('SNO', 'itemCode', 'Name', 'Quantity')] + receiptData
+            printReport('Stock Receipt', {'Date': dt}, receiptData, total=False)
 
-#*************************The following line used for main menu*************************
+# ********** Main entry function for menu **********
 def mainMenu(dbCur, userData):
     while True:
         options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
                    "Daily Sales entry", "Report generation", "Exit"]
         opt = inputLOV("What would you like to do?", options)
         if opt == "User control":
-            if userData['name'] != 'Administrator':
+            if not userData['isAdmin']:
                 log('E', "User", userData['name'], "doesn't have rights to manage users!")
             else:
-                staffMan(dbCur, userData)
+                staffMan(dbCur)
         elif opt == "Manage Customers":
-            if userData['name'] != 'Administrator':
+            if not userData['isAdmin']:
                 log('E', "User", userData['name'], "doesn't have rights to manage customers!")
             else:
-                custMan(dbCur, userData)
+                custMan(dbCur)
         elif opt == "Customize menu":
-            menuMan(dbCur, userData)
+            menuMan(dbCur)
         elif opt == "Daily Stock receipt":
-            stockMan(dbCur, userData)
+            stockMan(dbCur)
         elif opt == "Daily Sales entry":
-            salesMan(dbCur, userData)
+            salesMan(dbCur)
         elif opt == "Report generation":
-            repMan(dbCur, userData)
+            repMan(dbCur)
         elif opt == "Exit":
             print(cols, f"Logging out user: {userData['name']}...")
             break
@@ -515,10 +552,10 @@ def mainMenu(dbCur, userData):
     log('S', "Successfully logged out!")
     print(cols, "Thank you")
 
-if conn.is_connected():
+if not dbConnError and conn.is_connected():
     cur = conn.cursor()
 
-    print(colors.clear, end="")
+    print(clrClear, end="")
     printBanner("Welcome to Cafeteria Management System")
     uname = input(cols + "Enter Username: ")
     pswd = input(cols + "Enter password: ")
@@ -526,9 +563,9 @@ if conn.is_connected():
     data = cur.fetchall()
     if data != []:
         if data[0][1] == pswd:
-            userData = {"name": data[0][0], "username": uname}
+            userData = {"name": data[0][0], "username": uname, "isAdmin": uname == "Administrator"}
             log('I', 'Logon Success')
-            print(cols, colors.bold, f"\bWelcome, {userData['name']}", colors.reset)
+            print(cols, clrBold, f"\bWelcome, {userData['name']}", clrReset)
             mainMenu(cur, userData)
         else:
             log('E', "Invalid password for user:", uname)
@@ -536,6 +573,7 @@ if conn.is_connected():
         log('E', "No such user in database:", uname)
 
 input("Press enter to continue...")
-conn.commit()
-conn.close()
+if not dbConnError:
+    conn.commit()
+    conn.close()
 

@@ -9,7 +9,7 @@ DROP TABLE IF EXISTS Staff;
 CREATE TABLE Staff (
 	id INT PRIMARY KEY,
 	name VARCHAR(25),
-	username VARCHAR(20),
+	userId VARCHAR(20),
 	passwd VARCHAR(64),
 	status VARCHAR(1) CHECK(status IN ('A', 'I'))
 );
@@ -32,7 +32,7 @@ CREATE TABLE DailyStock (
 
 DROP TABLE IF EXISTS Customer;
 CREATE TABLE Customer (
-	custId INT,
+	custCode INT,
 	name VARCHAR(25),
 	custType VARCHAR(7) CHECK(custType IN ('Student', 'Staff')),
 	status VARCHAR(1) CHECK(status IN ('A', 'I'))
@@ -44,5 +44,7 @@ CREATE TABLE Sales (
 	tDate DATE,
 	custCode INT,
 	itemCode INT,
-	qty INT
+	qty INT,
+	FOREIGN KEY(custCode) REFERENCES Customer(custCode),
+	FOREIGN KEY(itemCode) REFERENCES Items(itemCode)
 );
