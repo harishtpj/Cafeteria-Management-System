@@ -26,13 +26,13 @@ CREATE TABLE DailyStock (
 	itemCode INT,
 	receiptDate DATE,
 	quantity INT,
-	PRIMARY KEY(itemCode, reciptDate),
+	PRIMARY KEY(itemCode, receiptDate),
 	FOREIGN KEY(itemCode) REFERENCES Items(itemCode)
 );
 
 DROP TABLE IF EXISTS Customer;
 CREATE TABLE Customer (
-	custCode INT,
+	custCode INT PRIMARY KEY,
 	name VARCHAR(25),
 	custType VARCHAR(7) CHECK(custType IN ('Student', 'Staff')),
 	status VARCHAR(1) CHECK(status IN ('A', 'I'))

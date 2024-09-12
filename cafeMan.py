@@ -112,7 +112,7 @@ def printReport(tagline, custData, repData, total=True):
             billF.write(printBanner("The Velammal Cafeteria - {} Report".format(tagline), asStr=True)+'\n')
             for k, v in custData.items():
                 billF.write(cols+"{}: {}\n".format(k, v))
-            billF.write(genTable(repData, footer=True))
+            billF.write(genTable(repData, footer=total))
         log('S', "Succesfully printed", tagline, "report to", bname)
 
 # ********** Function to Manage Staff Details **********
@@ -126,7 +126,7 @@ def staffMan(dbCur):
         name = input(cols+"Enter Staff name: ")
         uname = input(cols+"Enter userid for user: ")
         passwd = input(cols+"Enter password for user: ")
-        dbCur.execute("SELECT MAX(id)+1 FROM staff")
+        dbCur.execute("SELECT IFNULL(MAX(id), 0)+1 FROM staff")
         dbCur.execute("INSERT INTO staff VALUES ({}, '{}', '{}', '{}', 'A')"\
                       .format(dbCur.fetchone()[0], name, uname, passwd))
         conn.commit()
@@ -163,13 +163,15 @@ def staffMan(dbCur):
     elif opt == "View users":
         opt = inputLOV("How would you like to view users?", ["All", "Search"])
         if opt == "All":
+            _flagAll = True
             query = "SELECT * FROM staff"
         elif opt == "Search":
+            _flagAll = False
             uid = validateInput(cols+"Enter the user id: ", None, int)
             query = "SELECT * FROM staff WHERE id = {}".format(uid)
         dbCur.execute(query)
         data = dbCur.fetchall()
-        if data == []:
+        if data == [] and not _flagAll:
             log('I', "No such user with id {} found".format(uid))
         else:
             print(genTable(header + data))
@@ -195,7 +197,7 @@ def custMan(dbCur):
         printTitle("Adding new customer")
         name = input(cols+"Enter name of the customer: ")
         ckind = validateInput(cols+"Enter customer kind[(S)tudent/s(T)aff]: ", "ST")
-        dbCur.execute("SELECT MAX(custCode)+1 FROM customer")
+        dbCur.execute("SELECT IFNULL(MAX(custCode),0)+1 FROM customer")
         dbCur.execute("INSERT INTO customer VALUES ({}, '{}', '{}', 'A')"\
                       .format(dbCur.fetchone()[0], name, kindSwitch[ckind]))
         conn.commit()
@@ -229,13 +231,15 @@ def custMan(dbCur):
     elif opt == "View customers":
         opt = inputLOV("How would you like to view customers?", ["All", "Search"])
         if opt == "All":
+            _flagAll = True
             query = "SELECT * FROM customer"
         elif opt == "Search":
+            _flagAll = False
             cid = validateInput(cols+"Enter the custCode: ", None, int)
             query = "SELECT * FROM customer WHERE custCode = {}".format(cid)
         dbCur.execute(query)
         data = dbCur.fetchall()
-        if data == []:
+        if data == [] and not _flagAll:
             log('I', "No such customer with code {} found".format(cid))
         else:
             print(genTable(header + data))
@@ -260,7 +264,7 @@ def menuMan(dbCur):
         printTitle("Adding new menu Item")
         name = input(cols+"Enter name of menu item: ")
         rate = validateInput(cols+"Enter rate: ", None, float)
-        dbCur.execute("SELECT MAX(itemCode)+1 FROM items")
+        dbCur.execute("SELECT IFNULL(MAX(itemCode),0)+1 FROM items")
         dbCur.execute("INSERT INTO items VALUES ({}, '{}', {})".format(dbCur.fetchone()[0], name, rate))
         conn.commit()
         log('S', "Added new menu item successfully!")
@@ -405,7 +409,7 @@ def salesMan(dbCur):
         pBill = validateInput("Do you want to print bill[y/n]: ", "yn")
         if pBill == 'y':
             dbCur.execute("SELECT current_date()")
-            custData['Date'] = dbCur.fetchone()[0]
+            custData['Date'] = str(dbCur.fetchone()[0])
             dbCur.execute("SELECT i.itemName, s.qty, s.qty*i.rate FROM items i, sales s\
                           WHERE i.itemCode = s.itemCode AND s.custCode = {}\
                           AND s.tokenId = {} AND s.tDate = current_date()"\
@@ -423,7 +427,7 @@ def salesMan(dbCur):
                       WHERE s.custCode = c.custCode AND s.tDate = current_date()")
         table = dbCur.fetchall()
         print(genTable(billTokHdr + table))
-        tid = validateInput(cols+"Enter the tokenId to update: ", [x[0] for x in data], int)
+        tid = validateInput(cols+"Enter the tokenId to update: ", [x[0] for x in table], int)
         dbCur.execute("SELECT s.itemcode, i.itemName, s.qty FROM items i, sales s\
                       WHERE i.itemCode = s.itemCode AND s.tokenId = {}\
                       AND s.tDate = current_date()".format(tid))
@@ -455,7 +459,10 @@ def salesMan(dbCur):
                       WHERE s.custCode = c.custCode AND s.tDate = current_date()")
         data = dbCur.fetchall()
         print(genTable(billTokHdr + data))
-        tid = validateInput(cols+"Enter the tokenId of bill to delete: ", [str(x[0]) for x in data], int)
+        tid = validateInput(cols+"Enter the tokenId of bill to delete: ", [x[0] for x in data], int)
+        dbCur.execute("UPDATE sales s, dailyStock d SET d.quantity = d.quantity + s.qty WHERE\
+                      s.itemCode = d.itemCode AND s.tokenId = {} AND s.tDate = current_date()\
+                      AND d.receiptDate = current_date()".format(tid))
         dbCur.execute("DELETE FROM sales WHERE tDate = current_date() AND tokenId = {}".format(tid))
         conn.commit()
         log('S', "Deleted bill sucessfully!")
@@ -489,7 +496,7 @@ def repMan(dbCur):
                 total += billData[sno][2]
                 billData[sno] = (sno+1,) + billData[sno]
             billData = [('SNO', 'Item', 'Quantity', 'Price')] + billData + [('', '', 'Total', total)]
-            printReport('Bill', custData, billData)
+            printReport('Bill', custData, billData, total)
 
     elif opt == "Sales Reconcilation":
         dbCur.execute("SELECT s.itemCode, i.itemName, d.quantity+SUM(s.qty), SUM(s.qty),\
@@ -563,10 +570,18 @@ if not dbConnError and conn.is_connected():
     data = cur.fetchall()
     if data != []:
         if data[0][1] == pswd:
-            userData = {"name": data[0][0], "username": uname, "isAdmin": uname == "Administrator"}
+            userData = {"name": data[0][0], "username": uname, "isAdmin": data[0][0] == "Administrator"}
             log('I', 'Logon Success')
             print(cols, clrBold, f"\bWelcome, {userData['name']}", clrReset)
-            mainMenu(cur, userData)
+            try:
+                mainMenu(cur, userData)
+            except KeyboardInterrupt:
+                log('W', "User Interrupted Operation. Exiting...")
+            except Exception as e:
+                log('E', "FATAL ERROR OCCURED")
+                log('E', "The error message was:")
+                #raise e
+                log('E', str(e))
         else:
             log('E', "Invalid password for user:", uname)
     else:
