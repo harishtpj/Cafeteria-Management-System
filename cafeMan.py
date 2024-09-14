@@ -2,6 +2,9 @@
 # Written by M.V.Harish Kumar - Grade 12 'A' on 05-09-2024
 import mysql.connector as ms
 
+# TODO: Add incentive report
+# TODO: Change Sales reconcilation
+
 # ********** Terminal Formatting codes and settings **********
 cols = " " * 40
 
@@ -15,7 +18,7 @@ clrGreen = '\033[32m'
 clrYellow = '\033[93m'
 
 # ********** Logging Function **********
-def log(kind='I', *args, sep=' '):
+def log(kind, msg):
     kinds = {
             'I': ('INFO', clrBold, ''),
             'E': ('ERROR', clrRed, '\a'),
@@ -23,7 +26,7 @@ def log(kind='I', *args, sep=' '):
             'W': ('WARNING', clrYellow, '\a')
     }
     k, c, a = kinds[kind]
-    print(a, cols, "{}{}:".format(c,k), *args, clrReset, sep=sep)
+    print(a, cols, "{}{}:".format(c,k), msg, clrReset)
 
 # ********** Connect to Database **********
 try:
@@ -31,11 +34,11 @@ try:
     conn = ms.connect(host="localhost", user="cafeAdmin", passwd="cafe@p$wd", db="cafeteria")
 except:
     dbConnError = True
-    log('E', "\tServer Error Occured", "\tCan't connect to Database Server", "\tPlease try again", sep='\n')
+    log('E', "Server Error Occured\n{0}\tCan't connect to Database Server\n{0}\tPlease try again"\
+        .format(cols))
 
 # ********** CMDLINE Printing and Formatting Helpers **********
-def printBanner(*args, sep=' ', asStr=False):
-    pStr = sep.join(args)
+def printBanner(pStr, asStr=False):
     border = cols + "+-{}-+".format('-'*len(pStr)) + "\n"
     if not asStr:
         pStr = clrBlink + clrBold + pStr + clrReset
@@ -113,7 +116,7 @@ def printReport(tagline, custData, repData, total=True):
             for k, v in custData.items():
                 billF.write(cols+"{}: {}\n".format(k, v))
             billF.write(genTable(repData, footer=total))
-        log('S', "Succesfully printed", tagline, "report to", bname)
+        log('S', "Succesfully printed {} report to {}".format(tagline, bname))
 
 # ********** Function to Manage Staff Details **********
 def staffMan(dbCur):
@@ -351,7 +354,7 @@ def stockMan(dbCur):
         log('S', "Deleted item sucessfully!")
 
 def addBill(dbCur, tokId, query):
-    log('I', "Current Token id is", tokId)
+    log('I', "Current Token id is {}".format(tokId))
     opt = "y"
     while opt.lower() == 'y':
         itemCodes = []
@@ -377,11 +380,11 @@ def addBill(dbCur, tokId, query):
                     itemCodes.append(icd)
                     dbCur.execute(query % (icd, qty))
                 break
-            log('E', "Only", threshold, "unit(s) is available, enter another value")
+            log('E', "Only {} unit(s) is available, enter another value".format(threshold))
         opt = validateInput("Do you want to continue[y/n]: ", "yn")
 
 # ********** Function to Manage Daily Sales **********
-def salesMan(dbCur):
+def salesMan(dbCur, staffId):
     options = ["Add bill", "Update bill", "Delete bill"]
     itemHdr = [("itemCode", "Item Name", "Quantity")]
     custHdr = [("custCode", "Name", "Type")]
@@ -400,8 +403,8 @@ def salesMan(dbCur):
                 custData['Name'] = rec[1]
         dbCur.execute("SELECT IFNULL(MAX(tokenId),0)+1 FROM sales WHERE tDate = current_date()")
         custData['Token ID'] = dbCur.fetchone()[0]
-        query = "INSERT INTO sales VALUES({}, current_date(), {}, %s, %s)" \
-                .format(custData['Token ID'], custData['custCode'])
+        query = "INSERT INTO sales VALUES({}, current_date(), {}, %s, %s, {})" \
+                .format(custData['Token ID'], custData['custCode'], staffId)
         addBill(dbCur, custData['Token ID'], query)
         conn.commit()
         log('S', "Added bill successfully!")
@@ -478,7 +481,7 @@ def repMan(dbCur):
                       WHERE tDate = '{}' AND c.custCode = s.custCode".format(dt))
         data = dbCur.fetchall()
         if data == []:
-            log('E', 'No records found on date:', dt)
+            log('E', 'No records found on date: {}'.format(dt))
         else:
             custData = {'Date': dt}
             print(genTable([('Token ID', 'custCode', 'Customer Name')] + data))
@@ -506,7 +509,7 @@ def repMan(dbCur):
                       GROUP BY s.itemCode, d.itemCode, d.quantity".format(dt))
         salesData = dbCur.fetchall()
         if salesData == []:
-            log('E', 'No records found on date:', dt)
+            log('E', 'No records found on date: {}'.format(dt))
         else:
             for sno in range(len(salesData)):
                 salesData[sno] = (sno+1,) + salesData[sno]
@@ -519,7 +522,7 @@ def repMan(dbCur):
                         WHERE i.itemCode = s.itemCode AND s.receiptDate = '{}'".format(dt))
         receiptData = dbCur.fetchall()
         if receiptData == []:
-            log('E', 'No records found on date:', dt)
+            log('E', 'No records found on date: {}'.format(dt))
         else:
             total = 0
             for sno in range(len(receiptData)):
@@ -531,30 +534,39 @@ def repMan(dbCur):
 # ********** Main entry function for menu **********
 def mainMenu(dbCur, userData):
     while True:
-        options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
-                   "Daily Sales entry", "Report generation", "Exit"]
-        opt = inputLOV("What would you like to do?", options)
-        if opt == "User control":
-            if not userData['isAdmin']:
-                log('E', "User", userData['name'], "doesn't have rights to manage users!")
-            else:
-                staffMan(dbCur)
-        elif opt == "Manage Customers":
-            if not userData['isAdmin']:
-                log('E', "User", userData['name'], "doesn't have rights to manage customers!")
-            else:
-                custMan(dbCur)
-        elif opt == "Customize menu":
-            menuMan(dbCur)
-        elif opt == "Daily Stock receipt":
-            stockMan(dbCur)
-        elif opt == "Daily Sales entry":
-            salesMan(dbCur)
-        elif opt == "Report generation":
-            repMan(dbCur)
-        elif opt == "Exit":
-            print(cols, f"Logging out user: {userData['name']}...")
-            break
+        try:
+            options = ["User control", "Manage Customers", "Customize menu", "Daily Stock receipt",
+                       "Daily Sales entry", "Report generation", "Exit"]
+            opt = inputLOV("What would you like to do?", options)
+            if opt == "User control":
+                if not userData['isAdmin']:
+                    log('E', "User {} doesn't have rights to manage users!".format(userData['name']))
+                else:
+                    staffMan(dbCur)
+            elif opt == "Manage Customers":
+                if not userData['isAdmin']:
+                    log('E', "User {} doesn't have rights to manage customers!".format(userData['name']))
+                else:
+                    custMan(dbCur)
+            elif opt == "Customize menu":
+                menuMan(dbCur)
+            elif opt == "Daily Stock receipt":
+                stockMan(dbCur)
+            elif opt == "Daily Sales entry":
+                salesMan(dbCur, userData["staffId"])
+            elif opt == "Report generation":
+                repMan(dbCur)
+            elif opt == "Exit":
+                print(cols, "Logging out user: {}...".format(userData['name']))
+                userData.clear()
+                break
+        except KeyboardInterrupt:
+            print(); log('W', "User Interrupted Operation.")
+        except Exception as e:
+            log('E', "FATAL ERROR OCCURED")
+            log('E', "The error message was:")
+            raise e # For Debug Purpose
+            log('E', str(e))
     
     log('S', "Successfully logged out!")
     print(cols, "Thank you")
@@ -566,22 +578,15 @@ if not dbConnError and conn.is_connected():
     printBanner("Welcome to Cafeteria Management System")
     uname = input(cols + "Enter Username: ")
     pswd = input(cols + "Enter password: ")
-    cur.execute(f"SELECT name, passwd FROM staff WHERE userId = '{uname}' AND status = 'A'")
+    cur.execute(f"SELECT id, name, passwd FROM staff WHERE userId = '{uname}' AND status = 'A'")
     data = cur.fetchall()
     if data != []:
-        if data[0][1] == pswd:
-            userData = {"name": data[0][0], "username": uname, "isAdmin": data[0][0] == "Administrator"}
+        if data[0][2] == pswd:
+            userData = {"name": data[0][1], "username": uname, 
+                        "isAdmin": data[0][1] == "Administrator", "staffId": data[0][0]}
             log('I', 'Logon Success')
             print(cols, clrBold, f"\bWelcome, {userData['name']}", clrReset)
-            try:
-                mainMenu(cur, userData)
-            except KeyboardInterrupt:
-                log('W', "User Interrupted Operation. Exiting...")
-            except Exception as e:
-                log('E', "FATAL ERROR OCCURED")
-                log('E', "The error message was:")
-                #raise e
-                log('E', str(e))
+            mainMenu(cur, userData)
         else:
             log('E', "Invalid password for user:", uname)
     else:

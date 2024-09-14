@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Sep 12, 2024 at 02:11 PM
+-- Generation Time: Sep 14, 2024 at 02:25 PM
 -- Server version: 8.0.32
 -- PHP Version: 8.3.10
 
@@ -34,7 +34,7 @@ CREATE TABLE `customer` (
   `name` varchar(25) DEFAULT NULL,
   `custType` varchar(7) DEFAULT NULL,
   `status` varchar(1) DEFAULT NULL
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `customer`
@@ -145,7 +145,8 @@ CREATE TABLE `sales` (
   `tDate` date DEFAULT NULL,
   `custCode` int DEFAULT NULL,
   `itemCode` int DEFAULT NULL,
-  `qty` int DEFAULT NULL
+  `qty` int DEFAULT NULL,
+  `staffId` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
@@ -160,7 +161,7 @@ CREATE TABLE `staff` (
   `userId` varchar(20) DEFAULT NULL,
   `passwd` varchar(64) DEFAULT NULL,
   `status` varchar(1) DEFAULT NULL
-) ;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `staff`
@@ -196,7 +197,8 @@ ALTER TABLE `items`
 --
 ALTER TABLE `sales`
   ADD KEY `custCode` (`custCode`),
-  ADD KEY `itemCode` (`itemCode`);
+  ADD KEY `itemCode` (`itemCode`),
+  ADD KEY `staffId` (`staffId`);
 
 --
 -- Indexes for table `staff`
@@ -219,7 +221,8 @@ ALTER TABLE `dailystock`
 --
 ALTER TABLE `sales`
   ADD CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`custCode`) REFERENCES `customer` (`custCode`),
-  ADD CONSTRAINT `sales_ibfk_2` FOREIGN KEY (`itemCode`) REFERENCES `items` (`itemCode`);
+  ADD CONSTRAINT `sales_ibfk_2` FOREIGN KEY (`itemCode`) REFERENCES `items` (`itemCode`),
+  ADD CONSTRAINT `sales_ibfk_3` FOREIGN KEY (`staffId`) REFERENCES `staff` (`id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

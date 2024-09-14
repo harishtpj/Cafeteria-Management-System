@@ -45,6 +45,8 @@ CREATE TABLE Sales (
 	custCode INT,
 	itemCode INT,
 	qty INT,
+	staffId INT,
 	FOREIGN KEY(custCode) REFERENCES Customer(custCode),
-	FOREIGN KEY(itemCode) REFERENCES Items(itemCode)
+	FOREIGN KEY(itemCode) REFERENCES Items(itemCode),
+	FOREIGN KEY(staffId) REFERENCES Staff(id)
 );
