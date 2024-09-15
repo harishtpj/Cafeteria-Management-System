@@ -2,9 +2,6 @@
 # Written by M.V.Harish Kumar - Grade 12 'A' on 05-09-2024
 import mysql.connector as ms
 
-# TODO: Add incentive report
-# TODO: Change Sales reconcilation
-
 # ********** Terminal Formatting codes and settings **********
 cols = " " * 40
 
@@ -57,7 +54,8 @@ def genTable(data, header=True, footer=False, colp=True):
     table = [border]
     
     def format_row(row):
-        return "| " + " | ".join(f"{str(item).ljust(width)}" for item, width in zip(row, col_widths)) + " |"
+        return "| " + " | "\
+            .join(str(item).ljust(width) for item, width in zip(row, col_widths)) + " |"
     
     table.append(format_row(data[0]))
     if header:
@@ -105,6 +103,8 @@ def printReport(tagline, custData, repData, total=True):
     if kind == "y":
         printBanner("The Velammal Cafeteria - {} Report".format(tagline))
         for k, v in custData.items():
+            if tagline == 'Incentive Report' and k == 'Date':
+                k = 'Period'
             print(cols,"{}: {}".format(k, v))
         print(genTable(repData, footer=total))
     else:
@@ -112,7 +112,8 @@ def printReport(tagline, custData, repData, total=True):
         bname = "{}_{}_{}.txt".format(tagline.replace(' ', ''), custData.get('custCode', ''), 
                                       custData['Date'].replace('-', ''))
         with open(bname, 'w') as billF:
-            billF.write(printBanner("The Velammal Cafeteria - {} Report".format(tagline), asStr=True)+'\n')
+            billF.write(printBanner("The Velammal Cafeteria - {} Report".format(tagline)\
+                                    , asStr=True)+'\n')
             for k, v in custData.items():
                 billF.write(cols+"{}: {}\n".format(k, v))
             billF.write(genTable(repData, footer=total))
@@ -155,7 +156,8 @@ def staffMan(dbCur):
         passwd = input(cols+"Enter password[Default: {}]: ".format(data[3]))
         if not passwd:
             passwd = data[3]
-        sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: ".format(data[4]), "AI")
+        sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: "\
+                            .format(data[4]), "AI")
         if not sts:
             sts = data[4]
         dbCur.execute("UPDATE staff SET name='{}',userid='{}',passwd='{}',status='{}'\
@@ -223,7 +225,8 @@ def custMan(dbCur):
         ckind = validateInput(cols+"Enter customer kind[(S)tudent/s(T)aff][Default: {}]: "\
                               .format(data[2]), "TS")
         ckind = kindSwitch.get(ckind, data[2])
-        sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: ".format(data[3]), "AI")
+        sts = validateInput(cols+"Enter Status[(A)ctive/(I)nactive][Default: {}]: "\
+                            .format(data[3]), "AI")
         if not sts:
             sts = data[3]
         dbCur.execute("UPDATE customer SET name='{}',custType='{}',status='{}'\
@@ -268,7 +271,8 @@ def menuMan(dbCur):
         name = input(cols+"Enter name of menu item: ")
         rate = validateInput(cols+"Enter rate: ", None, float)
         dbCur.execute("SELECT IFNULL(MAX(itemCode),0)+1 FROM items")
-        dbCur.execute("INSERT INTO items VALUES ({}, '{}', {})".format(dbCur.fetchone()[0], name, rate))
+        dbCur.execute("INSERT INTO items VALUES ({}, '{}', {})"\
+                      .format(dbCur.fetchone()[0], name, rate))
         conn.commit()
         log('S', "Added new menu item successfully!")
 
@@ -325,13 +329,13 @@ def stockMan(dbCur):
 
     elif opt == "View receipt":
         dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
-                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date()")
         print(genTable(header + dbCur.fetchall()))
 
     elif opt == "Update quantity":
         printTitle("Updating quantity")
         dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
-                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date()")
         table = dbCur.fetchall()
         print(genTable(header + table))
         icd = validateInput(cols+"Enter the itemCode to update: ", [x[0] for x in table], int)
@@ -344,7 +348,7 @@ def stockMan(dbCur):
     elif opt == "Delete item":
         printTitle("Deleting receipt item")
         dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
-                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date()")
         table = dbCur.fetchall()
         print(genTable(header + table))
         icd = validateInput(cols+"Enter the itemCode to delete: ", [x[0] for x in table], int)
@@ -359,7 +363,7 @@ def addBill(dbCur, tokId, query):
     while opt.lower() == 'y':
         itemCodes = []
         dbCur.execute("SELECT i.itemCode, i.itemName, s.quantity FROM dailyStock s, items i\
-                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date();")
+                      WHERE i.itemCode = s.itemCode AND s.receiptDate = current_date()")
         header = [("itemCode", "itemName", "quantity")]
         table = dbCur.fetchall()
         print(genTable(header + table))
@@ -472,9 +476,13 @@ def salesMan(dbCur, staffId):
 
 # ********** Function to Manage Reports **********
 def repMan(dbCur):
-    options = ["Bill History", "Sales Reconcilation", "Stock Receipt"]
+    options = ["Bill History", "Sales Reconcilation", "Stock Receipt", "Incentive Report"]
     opt = inputLOV("Enter your choice: ", options)
-    dt = inputDate("Date of History")
+    if opt != "Incentive Report":
+        dt = inputDate("Date of History")
+    else:
+        m = validateInput(cols+"Enter month[1-12]: ", range(1, 13), int)
+        y = validateInput(cols+"Enter year[YYYY]: ", range(2024, 2025), int)
 
     if opt == "Bill History":
         dbCur.execute("SELECT DISTINCT s.tokenId, c.custCode, c.name FROM sales s, customer c\
@@ -502,11 +510,11 @@ def repMan(dbCur):
             printReport('Bill', custData, billData, total)
 
     elif opt == "Sales Reconcilation":
-        dbCur.execute("SELECT s.itemCode, i.itemName, d.quantity+SUM(s.qty), SUM(s.qty),\
-                      d.quantity FROM sales s, items i, dailyStock d\
-                      WHERE s.itemCode = i.itemCode AND d.itemCode = s.itemCode\
-                      AND s.tDate = '{0}' AND d.receiptDate = '{0}'\
-                      GROUP BY s.itemCode, d.itemCode, d.quantity".format(dt))
+        dbCur.execute("SELECT t.itemCode, i.itemName, t.sold+t.remaining, t.sold, t.remaining\
+                      FROM (SELECT d.itemCode, ifnull(sum(s.qty),0) sold, d.quantity remaining\
+                      FROM sales s RIGHT JOIN dailyStock d ON d.receiptDate = '{0}'\
+                      AND d.itemCode = s.itemCode GROUP BY itemCode, quantity) t, items i\
+                      WHERE i.itemCode = t.itemCode".format(dt))
         salesData = dbCur.fetchall()
         if salesData == []:
             log('E', 'No records found on date: {}'.format(dt))
@@ -524,12 +532,27 @@ def repMan(dbCur):
         if receiptData == []:
             log('E', 'No records found on date: {}'.format(dt))
         else:
-            total = 0
             for sno in range(len(receiptData)):
-                total += receiptData[sno][2]
                 receiptData[sno] = (sno+1,) + receiptData[sno]
             receiptData = [('SNO', 'itemCode', 'Name', 'Quantity')] + receiptData
             printReport('Stock Receipt', {'Date': dt}, receiptData, total=False)
+    
+    elif opt == "Incentive Report":
+        dbCur.execute("SELECT s.staffId, u.Name, SUM(s.qty*i.rate) FROM sales s, items i, staff u\
+                      WHERE s.itemCode = i.itemCode AND s.staffId = u.id AND MONTH(s.tDate) = {}\
+                      AND YEAR(s.tDate) = {} GROUP BY staffId ORDER BY SUM(s.qty*i.rate) DESC"\
+                      .format(m,y))
+        incentiveData = dbCur.fetchall()
+        period = '{}-{}'.format(m,y)
+        if incentiveData == []:
+            log('E', 'No records found on period: ' + period)
+        else:
+            for sno in range(len(incentiveData)):
+                incentiveData[sno] = (sno+1,) + incentiveData[sno] +\
+                      (round(float(incentiveData[sno][2])*0.02),)
+            incentiveData = [('Rank', 'staffId', 'Name', 'Amount sold', 'Incentive')]\
+                  + incentiveData
+            printReport('Incentive Report', {'Date': period}, incentiveData, total=False)
 
 # ********** Main entry function for menu **********
 def mainMenu(dbCur, userData):
@@ -540,12 +563,14 @@ def mainMenu(dbCur, userData):
             opt = inputLOV("What would you like to do?", options)
             if opt == "User control":
                 if not userData['isAdmin']:
-                    log('E', "User {} doesn't have rights to manage users!".format(userData['name']))
+                    log('E', "User {} doesn't have rights to manage users!"\
+                        .format(userData['name']))
                 else:
                     staffMan(dbCur)
             elif opt == "Manage Customers":
                 if not userData['isAdmin']:
-                    log('E', "User {} doesn't have rights to manage customers!".format(userData['name']))
+                    log('E', "User {} doesn't have rights to manage customers!"\
+                        .format(userData['name']))
                 else:
                     custMan(dbCur)
             elif opt == "Customize menu":
@@ -561,7 +586,8 @@ def mainMenu(dbCur, userData):
                 userData.clear()
                 break
         except KeyboardInterrupt:
-            print(); log('W', "User Interrupted Operation.")
+            print()
+            log('W', "User Interrupted Operation.")
         except Exception as e:
             log('E', "FATAL ERROR OCCURED")
             log('E', "The error message was:")
@@ -573,19 +599,19 @@ def mainMenu(dbCur, userData):
 
 if not dbConnError and conn.is_connected():
     cur = conn.cursor()
-
     print(clrClear, end="")
     printBanner("Welcome to Cafeteria Management System")
     uname = input(cols + "Enter Username: ")
     pswd = input(cols + "Enter password: ")
-    cur.execute(f"SELECT id, name, passwd FROM staff WHERE userId = '{uname}' AND status = 'A'")
+    cur.execute("SELECT id, name, passwd FROM staff WHERE userId = '{}'\
+                AND status = 'A'".format(uname))
     data = cur.fetchall()
     if data != []:
         if data[0][2] == pswd:
             userData = {"name": data[0][1], "username": uname, 
                         "isAdmin": data[0][1] == "Administrator", "staffId": data[0][0]}
             log('I', 'Logon Success')
-            print(cols, clrBold, f"\bWelcome, {userData['name']}", clrReset)
+            print(cols, clrBold, "\bWelcome,", userData['name'], clrReset)
             mainMenu(cur, userData)
         else:
             log('E', "Invalid password for user:", uname)
@@ -596,4 +622,3 @@ input("Press enter to continue...")
 if not dbConnError:
     conn.commit()
     conn.close()
-
