@@ -1,1 +1,1 @@
-@wt.exe py cafeMan.py
+@wt.exe py cafeMan_wd.py
