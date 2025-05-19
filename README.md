@@ -14,4 +14,4 @@ For more details about the project, click [here](https://github.com/harishtpj/Ca
 # License
 
 #### Copyright © 2025 [M.V.Harish Kumar](https://github.com/harishtpj). <br>
-#### This project is [GNU GPL v3.0](https://github.com/harishtpj/Cafeteria-Management-System/blob/f9acb6503bd224f73c593a7aec367e6ab197879b/LICENSE) licensed.
+#### This project is [GNU GPL-3.0](https://github.com/harishtpj/Cafeteria-Management-System/blob/f9acb6503bd224f73c593a7aec367e6ab197879b/LICENSE) licensed.
